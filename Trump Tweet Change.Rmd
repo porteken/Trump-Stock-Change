@@ -73,7 +73,7 @@ print(nlp.pipe_names)
 ```{python}
 trains=r.data
 nlp = spacy.load("en_trf_bertbaseuncased_lg")
-cleaning= list(nlp.pipe(trains['text'],n_threads=16, batch_size=10000))
+cleaning= list(nlp.pipe(trains['text']))
 trains['score']=pd.Series([doc.vector_norm for doc in cleaning])
 cleaning=[doc.text for doc in cleaning]
 trains['text']=pd.Series(cleaning)
