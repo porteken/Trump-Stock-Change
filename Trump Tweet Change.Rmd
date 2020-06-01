@@ -51,13 +51,14 @@ import spacy
 import string
 from spacy.tokens import DocBin
 import os
-#is_using_gpu = spacy.prefer_gpu()
-#if is_using_gpu:
-    #torch.set_default_tensor_type("torch.cuda.FloatTensor")
+from pathlib import Path
+from joblib import Parallel, delayed
+from functools import partial
+import thinc.extra.datasets
+import plac
+import spacy
+from spacy.util import minibatch
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-#import cupy
-#mempool = cupy.get_default_memory_pool()
-#mempool.free_all_blocks()
 ```
 
 ```{Python}
@@ -71,12 +72,22 @@ print(nlp.pipe_names)
 ```
 
 ```{python}
+def transform_texts(nlp,batch_id,texts):
+  df=df.append([doc.vector_norm for doc in texts])
+  df2=df2.append([doc.text for doc in texts])
+  
 trains=r.data
 nlp = spacy.load("en_trf_bertbaseuncased_lg")
-cleaning= list(nlp.pipe(trains['text']))
-trains['score']=pd.Series([doc.vector_norm for doc in cleaning])
-cleaning=[doc.text for doc in cleaning]
-trains['text']=pd.Series(cleaning)
+texts= list(nlp.pipe(trains['text']))
+partitions = minibatch(texts, size=1000)
+df = pd.Series()
+df2= pd.Series()
+executor = Parallel(n_jobs=-1, backend="multiprocessing", prefer="processes")
+do = delayed(partial(transform_texts, nlp))
+tasks = (do(i, batch) for i, batch in enumerate(partitions))
+executor(tasks)
+trains['score']=df
+trains['text']=df2
 trains.head()
 ```
 
