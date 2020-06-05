@@ -21,9 +21,8 @@ library(caret)
 library(fable)
 library(data.table)
 library(tsibble)
-library(mlr3measures)
 library(mlr3verse)
-knitr::knit_engines$set(python=reticulate::eng_python)
+use_condaenv('data',required=T)
 ```
 
 ```{R}
@@ -61,7 +60,7 @@ from spacy.util import minibatch
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 ```
 
-```{Python}
+```{python}
 from spacy_transformers import TransformersLanguage, TransformersWordPiecer, TransformersTok2Vec
 name = "bert-base-uncased"
 nlp = TransformersLanguage(trf_name=name, meta={"lang": "en"})
@@ -79,10 +78,10 @@ def transform_texts(nlp,batch_id,texts):
 trains=r.data
 nlp = spacy.load("en_trf_bertbaseuncased_lg")
 texts= list(nlp.pipe(trains['text']))
-partitions = minibatch(texts, size=1000)
+partitions = minibatch(texts, size=10000)
 df = pd.Series()
 df2= pd.Series()
-executor = Parallel(n_jobs=-1, prefer="threads")
+executor = Parallel(n_jobs=self.n_jobs, prefer="threads")
 do = delayed(partial(transform_texts, nlp))
 tasks = (do(i, batch) for i, batch in enumerate(partitions))
 executor(tasks)
