@@ -34,6 +34,7 @@ library(caret)
 library(tsibble)
 library(mlr3verse)
 library(mlr3measures)
+use_condaenv('data',required=T)
 ```
 
 ```{R}
