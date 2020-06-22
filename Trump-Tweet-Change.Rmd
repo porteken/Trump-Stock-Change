@@ -8,6 +8,7 @@ editor_options:
 ---
 
 ```{R message=F}
+rm(list=ls())
 if (Sys.info()[['sysname']]=='Windows')
 {
   # update executable path in sys module
@@ -48,6 +49,7 @@ dim(data)
 data$text<-gsub('http\\S+\\s*','',data$text)
 data$text<-gsub("[^0-9A-Za-z///' ]",'',data$text,ignore.case = T)
 data<-data %>% filter(text!='')
+data<-sample_n(data,1000)
 datatable(head(data))
 ```
 
@@ -64,6 +66,7 @@ prices$date<-mdy(prices$date)
 data<-full_join(data,prices,by='date')
 data<-data %>% mutate(weekend=if_else(wday(date) %in% c(6,7),1,0),change=as.factor(change),score=lead(score,1))  %>%  fill(change,.direction='up') %>% filter(score>0) %>% select(-one_of('date','text')) 
 data$is_retweet<-as.numeric(data$is_retweet)-1
+data<-data %>% filter(!is.na(is_retweet))
 train<-data[1:round(nrow(data)*.95-1,0),]
 test<-data[round(nrow(data)*.95-1,0):nrow(data),]
 data.table(data)
@@ -83,7 +86,7 @@ bench$aggregate() %>% arrange(classif.ce)
 
 ```{R}
 searchspace<-ParamSet$new(list(ParamInt$new('num.trees',lower = 100,upper=1200),ParamInt$new('max.depth',lower=5,upper=30)))
-tuner<-AutoTuner$new(lrn('classif.ranger'),rsmp('cv',folds=10),msr('classif.ce'),searchspace,term('evals',n_evals=36),tnr('random_search',batch_size=36))
+tuner<-AutoTuner$new(lrn('classif.ranger'),rsmp('cv',folds=10),msr('classif.ce'),searchspace,term('evals',n_evals=36),mlr3tuning::tnr('random_search',batch_size=36))
 model<-tuner$train(task)
 model$tuning_result
 ```
