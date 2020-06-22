@@ -35,6 +35,8 @@ library(tsibble)
 library(mlr3verse)
 library(mlr3measures)
 use_condaenv('data',required=T)
+py_gc <- import("gc")
+py_gc$collect()
 ```
 
 ```{R}
@@ -49,10 +51,12 @@ dim(data)
 data$text<-gsub('http\\S+\\s*','',data$text)
 data$text<-gsub("[^0-9A-Za-z///' ]",'',data$text,ignore.case = T)
 data<-data %>% filter(text!='')
+data<-sample_n(data,2000)
 datatable(head(data))
 ```
 
 ```{python}
+from numba import cuda 
 import numpy as np
 import pandas as pd
 import torch
@@ -62,20 +66,16 @@ import spacy
 import string
 from spacy.tokens import DocBin
 import os
-from pathlib import Path
-from joblib import Parallel, delayed
-import thinc.extra.datasets
-import plac
-import spacy
-from spacy.util import minibatch
-from functools import partial
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import psutil
-import multiprocessing
-import csv
-file='scores.csv'
-if Path(file).is_file():
-  os.remove(file)
+import cupy
+import torch
+from GPUtil import showUtilization as gpu_usage
+is_using_gpu = spacy.prefer_gpu()
+if is_using_gpu:
+    torch.set_default_tensor_type("torch.cuda.FloatTensor")
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+device = cuda.get_current_device()
+device.reset()
+gpu_usage()
 ```
 
 ```{python}
@@ -89,36 +89,24 @@ print(nlp.pipe_names)
 ```
 
 ```{python}
-def transform_texts(nlp,batch_id,texts):
-  text=texts
-  texts=list(nlp.pipe(texts))
-  with open(file,"a") as f:
-    headers = ['score', 'text']
-    writer = csv.DictWriter(f, delimiter=',', lineterminator='\n',fieldnames=headers)
-    file_is_empty = os.stat(file).st_size == 0
-    if file_is_empty:
-        writer.writeheader()
-    for doc in texts:
-      writer.writerow({'score':doc.vector_norm,'text':doc.text})
 trains=r.data
 nlp = spacy.load("en_trf_bertbaseuncased_lg")
-partitions = minibatch(trains['text'], size=1000)
-multiprocessing.freeze_support()
-executor = Parallel(n_jobs=-1,prefer='processes')
-do = delayed(partial(transform_texts, nlp))
-tasks = (do(i, batch) for i, batch in enumerate(partitions))
-executor(tasks)
+cleaning= list(nlp.pipe(trains['text']))
+trains['score']=pd.Series([doc.vector_norm for doc in cleaning])
+cleaning=[doc.text for doc in cleaning]
+trains['text']=pd.Series(cleaning)
+trains.head()
 ```
 
 ```{python warning=F}
-scores=pd.read_csv('scores.csv')
-trains=trains.merge(scores,how='inner',on='text')
 trains.shape
 trains['date']=pd.to_datetime(trains['date'])
 print(trains.head())
 ```
 
 ```{R message=F,tidy=T}
+py_gc <- import("gc")
+py_gc$collect()
 data<-py$trains
 data$date<-date(data$date)
 prices<-read.csv('SPY 2.csv',col.names = c('date','change'))
@@ -145,7 +133,7 @@ bench$aggregate() %>% arrange(classif.ce)
 
 ```{R}
 searchspace<-ParamSet$new(list(ParamInt$new('num.trees',lower = 100,upper=1200),ParamInt$new('max.depth',lower=5,upper=30)))
-tuner<-AutoTuner$new(lrn('classif.ranger'),rsmp('cv',folds=10),msr('classif.ce'),searchspace,term('evals',n_evals=36),tnr('random_search',batch_size=36))
+tuner<-AutoTuner$new(lrn('classif.ranger'),rsmp('cv',folds=10),msr('classif.ce'),searchspace,term('evals',n_evals=36),mlr3tuning::tnr('random_search',batch_size=36))
 model<-tuner$train(task)
 model$tuning_result
 ```
