@@ -37,21 +37,22 @@ library(mlr3measures)
 use_condaenv('data',required=T)
 py_gc <- import("gc")
 py_gc$collect()
+data<-fread('train.csv',quote="")
 ```
 
-```{R}
-data<-fread('train.csv')
-data$created_at<-with_tz(parse_date_time(data$created_at,'%m/%d/%Y H:M'),tzone='US/Central')
+```{R, warning=F}
+data<-data[!is.na(data$created_at)]
+data$created_at<-with_tz(parse_date_time(data$created_at,'%m-%d-%Y %H:%m:%s'),tzone='US/Central')
 dim(data)
 data<-data %>% mutate(date=if_else(am(created_at) | wday(created_at) %in% c(7,1),date(created_at),date(created_at+days(1))),is_retweet=as.factor(if_else(is_retweet=='TRUE',1,0))) %>% select(-one_of('created_at'))
-dim(data)
+dim(data) 
 ```
 
 ```{R warning=F}
 data$text<-gsub('http\\S+\\s*','',data$text)
 data$text<-gsub("[^0-9A-Za-z///' ]",'',data$text,ignore.case = T)
 data<-data %>% filter(text!='')
-data<-sample_n(data,2000)
+data<-sample_n(data,1000)
 datatable(head(data))
 ```
 
@@ -78,7 +79,7 @@ device.reset()
 gpu_usage()
 ```
 
-```{python}
+```{python, warning=F,message=F}
 from spacy_transformers import TransformersLanguage, TransformersWordPiecer, TransformersTok2Vec
 name = "bert-base-uncased"
 nlp = TransformersLanguage(trf_name=name, meta={"lang": "en"})
@@ -109,10 +110,11 @@ py_gc <- import("gc")
 py_gc$collect()
 data<-py$trains
 data$date<-date(data$date)
-prices<-read.csv('SPY 2.csv',col.names = c('date','change'))
-prices$date<-mdy(prices$date)
+prices<-read.csv('SPY.csv') %>% select('Date','Open','Close')
+names(prices)<-c('date','open','close')
+prices$date<-date(prices$date)
 data<-full_join(data,prices,by='date')
-data<-data %>% mutate(weekend=if_else(wday(date) %in% c(6,7),1,0),change=as.factor(change),score=lead(score,1))  %>%  fill(change,.direction='up') %>% filter(score>0) %>% select(-one_of('date','text')) 
+data<-data %>% mutate(weekend=if_else(wday(date) %in% c(6,7),1,0),change=as.factor(if_else(close>open,'1','0')),score=lead(score,1))  %>%  fill(change,.direction='up') %>% filter(score>0) %>% select(-one_of('date','text','open','close')) 
 data$is_retweet<-as.numeric(data$is_retweet)-1
 train<-data[1:round(nrow(data)*.95-1,0),]
 test<-data[round(nrow(data)*.95-1,0):nrow(data),]
