@@ -48,6 +48,7 @@ dim(data)
 data$text<-gsub('http\\S+\\s*','',data$text)
 data$text<-gsub("[^0-9A-Za-z///' ]",'',data$text,ignore.case = T)
 data<-data %>% filter(text!='')
+write.csv(sample_n(data,5000),'data.csv',row.names=F)
 data<-sample_n(data,100)
 datatable(head(data))
 ```
@@ -104,7 +105,7 @@ print(trains.head())
 ```{R message=F,tidy=T}
 py_gc <- import("gc")
 py_gc$collect()
-data<-read.csv('trains.csv')
+data<-read.csv('output.csv')
 data$date<-date(data$date)
 prices<-read.csv('SPY.csv') %>% select('Date','Open','Close')
 names(prices)<-c('date','open','close')
@@ -130,8 +131,8 @@ bench$aggregate() %>% arrange(classif.ce)
 ```
 
 ```{R}
-searchspace<-ParamSet$new(list(ParamInt$new('num.trees',lower = 100,upper=1200),ParamInt$new('max.depth',lower=5,upper=30)))
-tuner<-AutoTuner$new(lrn('classif.ranger'),rsmp('cv',folds=10),msr('classif.ce'),searchspace,trm('evals',n_evals=36),mlr3tuning::tnr('random_search',batch_size=36))
+searchspace<-ParamSet$new(list(ParamDbl$new('cost',lower = .1,upper=100),ParamDbl$new('gamma',lower=.0001,upper=10),ParamFct$new('kernel',c('polynomial','radial','sigmoid'))))
+tuner<-AutoTuner$new(lrn('classif.svm',type='C-classification'),rsmp('cv',folds=10),msr('classif.ce'),searchspace,trm('evals',n_evals=15),mlr3tuning::tnr('random_search',batch_size=36))
 model<-tuner$train(task)
 model$tuning_result
 ```
